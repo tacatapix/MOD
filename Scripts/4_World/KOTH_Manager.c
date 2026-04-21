@@ -472,7 +472,8 @@ class KOTH_Manager
 			float dx = p[0] - center[0];
 			float dz = p[2] - center[2];
 			if ((dx * dx + dz * dz) > rSq) continue;
-			string id = pb.GetIdentity() ? pb.GetIdentity().GetPlainId() : "";
+			string id = "";
+			if (pb.GetIdentity()) id = pb.GetIdentity().GetPlainId();
 			if (id == "") continue;
 			zi.PlayersInZone.Insert(id);
 		}
