@@ -205,6 +205,39 @@ dist/@PackFazupix_KOTH/
     └── PackFazupix_KOTH.pbo
 ```
 
+### Obfuscated + signed build (`armake2`)
+
+```bash
+# one-time: install armake2 (Rust)
+cargo install --git https://github.com/KoffeinFlummi/armake2 armake2
+
+# every build: obfuscate -> pack -> sign
+./tools/pack_obfuscated.sh Private
+```
+
+This produces `dist/@PackFazupix_KOTH_Obfuscated/` with:
+
+```
+mod.cpp
+addons/
+  PackFazupix_KOTH.pbo                         (minified sources)
+  PackFazupix_KOTH.pbo.Private.bisign          (DSA signature)
+keys/
+  Private.bikey                                (public verifier)
+```
+
+The matching `Private.biprivatekey` is written to `dist/keys/` and **must
+not be committed or distributed**. Any server running with
+`-verifySignatures=2` that has `Private.bikey` in its `keys/` folder will
+accept this PBO.
+
+The obfuscator (`tools/obfuscate.py`) strips comments and collapses
+whitespace but preserves every identifier. Enforce Script resolves
+classes/RPCs/CfgPatches by name across translation units, so blind
+renaming would brick the mod. Treat the obfuscation as cosmetic
+deterrence, not security — the scripts still load as plain text inside
+DayZ's script VM.
+
 ## Dependencies
 
 - **CommunityFramework** (`@CF`) — required. Used for the RPC pipeline and
