@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planejamento de Aula</title>
+  <meta name="description" content="Crie planos de aula com códigos BNCC gerados automaticamente por IA e exporte em PDF." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231E6091'/%3E%3Cpath d='M28 32h44v6H28zm0 14h44v6H28zm0 14h32v6H28zm0 14h38v6H28z' fill='white'/%3E%3C/svg%3E" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    textarea, input { spellcheck: true; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+  <header class="bg-[#1E6091] text-white shadow">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
+          <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h12v2H4z"/></svg>
+        </div>
+        <h1 class="text-lg sm:text-xl font-semibold">Planejamento de Aula</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="download.html" class="hidden sm:inline-block text-sm bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-md">Baixar APK</a>
+        <button id="btnSettings" class="text-sm bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-md">Ajustes</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-6">
+    <p class="text-sm text-slate-600 mb-4">
+      Preencha os campos abaixo e use <strong>Gerar BNCC</strong> para sugestões automáticas de habilidades e competências.
+      Ao final, exporte em PDF. Seus dados são salvos localmente no navegador.
+      Disponível também como <a href="download.html" class="text-[#1E6091] underline">aplicativo Android</a>.
+    </p>
+
+    <form id="form" class="space-y-4" spellcheck="true" lang="pt-BR"></form>
+
+    <div class="flex flex-col sm:flex-row gap-3 mt-6">
+      <button id="btnBncc" type="button"
+        class="flex-1 border border-[#1E6091] text-[#1E6091] font-medium rounded-lg py-3 hover:bg-[#1E6091]/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg>
+        <span id="btnBnccLabel">Gerar BNCC</span>
+      </button>
+      <button id="btnPdf" type="button"
+        class="flex-1 bg-[#1E6091] text-white font-medium rounded-lg py-3 hover:bg-[#174f77] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm-1 7V3.5L18.5 9z"/></svg>
+        <span>Exportar PDF</span>
+      </button>
+    </div>
+
+    <button id="btnLimpar" type="button" class="mt-3 text-sm text-slate-500 hover:text-red-600">Limpar formulário</button>
+
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg opacity-0 pointer-events-none transition-opacity"></div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
+      <h2 class="text-lg font-semibold mb-2">Ajustes</h2>
+      <p class="text-sm text-slate-600 mb-4">
+        Chave da API OpenAI usada para gerar os códigos BNCC.
+        Crie em <a href="https://platform.openai.com/api-keys" target="_blank" class="text-[#1E6091] underline">platform.openai.com/api-keys</a>.
+        A chave é salva apenas no seu navegador.
+      </p>
+      <label class="block text-sm font-medium mb-1">Chave OpenAI</label>
+      <input id="inputApiKey" type="password" placeholder="sk-..." class="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-[#1E6091] focus:outline-none" />
+      <label class="block text-sm font-medium mb-1 mt-4">Modelo</label>
+      <select id="inputModel" class="w-full border rounded-md px-3 py-2">
+        <option value="gpt-4o-mini">gpt-4o-mini (recomendado)</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="gpt-4-turbo">gpt-4-turbo</option>
+      </select>
+      <div class="flex justify-end gap-2 mt-6">
+        <button id="btnCancel" class="px-4 py-2 text-slate-600 hover:text-slate-900">Cancelar</button>
+        <button id="btnSave" class="px-4 py-2 bg-[#1E6091] text-white rounded-md hover:bg-[#174f77]">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="max-w-4xl mx-auto px-4 py-6 text-xs text-slate-500">
+    Os dados são armazenados localmente no seu navegador. Nada é enviado para servidores — exceto o conteúdo que você envia para a OpenAI ao gerar BNCC.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baixar APK — Planejamento de Aula</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231E6091'/%3E%3Cpath d='M28 32h44v6H28zm0 14h44v6H28zm0 14h32v6H28zm0 14h38v6H28z' fill='white'/%3E%3C/svg%3E" />
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+  <header class="bg-[#1E6091] text-white shadow">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-3 hover:opacity-90">
+        <div class="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
+          <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h12v2H4z"/></svg>
+        </div>
+        <h1 class="text-lg sm:text-xl font-semibold">Planejamento de Aula</h1>
+      </a>
+      <a href="index.html" class="text-sm bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-md">Usar no navegador</a>
+    </div>
+  </header>
+
+  <main class="max-w-2xl mx-auto px-4 py-10">
+    <h2 class="text-2xl font-bold mb-2">Baixar o aplicativo Android</h2>
+    <p class="text-slate-600 mb-6">
+      A versão Android funciona offline e tem as mesmas funcionalidades do site (gerar BNCC por IA e exportar PDF).
+      Cada versão guarda seus próprios planos — não sincronizam entre si.
+    </p>
+
+    <div class="bg-white border rounded-xl p-6 shadow-sm">
+      <div class="flex items-start gap-4">
+        <div class="w-14 h-14 bg-[#1E6091] rounded-xl flex items-center justify-center flex-shrink-0">
+          <svg viewBox="0 0 24 24" class="w-7 h-7 text-white" fill="currentColor">
+            <path d="M17.6 9.5l1.4-2.4c.1-.2 0-.5-.2-.6-.2-.1-.5 0-.6.2l-1.4 2.5C15.5 8.5 13.8 8 12 8s-3.5.5-4.8 1.2L5.8 6.7c-.1-.2-.4-.3-.6-.2-.2.1-.3.4-.2.6L6.4 9.5C3.7 10.9 2 13.4 2 16.2h20c0-2.8-1.7-5.3-4.4-6.7zM7 14.2c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9zm10 0c-.5 0-.9-.4-.9-.9s.4-.9.9-.9.9.4.9.9-.4.9-.9.9z"/>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="font-semibold text-lg">Planejamento de Aula</h3>
+          <p class="text-sm text-slate-500 mb-3">APK debug · ~18 MB · Android 7+ (SDK 24)</p>
+          <a id="apkDownload" href="app-debug.apk" download
+            class="inline-flex items-center gap-2 bg-[#1E6091] text-white font-medium rounded-lg px-5 py-2.5 hover:bg-[#174f77]">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor"><path d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z"/></svg>
+            Baixar APK
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8">
+      <h3 class="font-semibold mb-2">Como instalar</h3>
+      <ol class="list-decimal pl-6 space-y-2 text-sm text-slate-700">
+        <li>Baixe o arquivo <code>.apk</code> acima no seu celular Android.</li>
+        <li>Abra o arquivo baixado. O Android pode pedir para você permitir instalar "fontes desconhecidas".</li>
+        <li>Após instalar, abra o app e toque em <strong>Ajustes</strong> (ícone de engrenagem no topo direito).</li>
+        <li>Cole sua chave da OpenAI (<a href="https://platform.openai.com/api-keys" target="_blank" class="text-[#1E6091] underline">crie aqui</a>) e salve.</li>
+        <li>Pronto — preencha seus planos de aula, gere os códigos BNCC e exporte em PDF.</li>
+      </ol>
+    </div>
+
+    <div class="mt-8 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+      <strong>Nota:</strong> este é um APK debug assinado com a chave padrão de desenvolvimento. Para distribuição oficial na Play Store seria necessário assinar com uma chave de produção e publicar o app na loja.
+    </div>
+  </main>
+
+  <footer class="max-w-4xl mx-auto px-4 py-6 text-xs text-slate-500">
+    <a href="index.html" class="hover:underline">← Voltar para a versão web</a>
+  </footer>
+</body>
+</html>
