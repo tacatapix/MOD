@@ -331,11 +331,8 @@ class KOTH_Webhook
 	{
 		if (m_StatFlushes == 0) return;
 		if (m_StatFlushes % METRICS_LOG_EVERY_FLUSHES != 0) return;
-		KOTH_Log.Info("[webhook] metrics queued=" + m_StatQueued
-			+ " sent=" + m_StatSent
-			+ " dropped=" + m_StatDropped
-			+ " retries=" + m_StatRetries
-			+ " flushes=" + m_StatFlushes);
+		string metrics = "[webhook] metrics queued=" + m_StatQueued.ToString() + " sent=" + m_StatSent.ToString() + " dropped=" + m_StatDropped.ToString() + " retries=" + m_StatRetries.ToString() + " flushes=" + m_StatFlushes.ToString();
+		KOTH_Log.Info(metrics);
 	}
 
 	protected KOTH_WebhookEmbed Embed(string title, string desc, int color)
