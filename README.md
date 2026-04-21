@@ -150,7 +150,22 @@ Discord webhook. **Never commit this file.** Relevant fields:
 | `BatchSize`        | Embeds per POST (Discord caps at 10)                  |
 | `FlushIntervalSec` | How often the queue is flushed                        |
 | `MaxQueueSize`     | Queue cap — oldest embeds dropped past this           |
+| `MaxRetries`       | Retries per batch on 5xx/timeout (default `5`)        |
+| `MaxBackoffSec`    | Cap for exponential backoff between retries (`60`)    |
 | `Send*`            | Toggle each event type independently                  |
+
+The webhook is **hardened against downtime and rate-limits**:
+- In-flight guard: only one POST in flight at a time (slow Discord never
+  causes overlapping requests to pile up).
+- Retry budget: failed batches are re-queued (at the front, preserving FIFO)
+  up to `MaxRetries` times, with exponential backoff (`2^attempt` seconds,
+  clamped at `MaxBackoffSec`). Healthy POSTs reset the backoff.
+- Permanent-failure codes (`400`/`401`/`403`/`404`) are never retried — the
+  batch is dropped immediately and logged.
+- Payload cap: embed descriptions are truncated at 3500 chars so a runaway
+  string can't blow past Discord's 6000-char per-embed cap.
+- Metric log line every 10 flushes:
+  `[KOTH][INFO][webhook] metrics queued=X sent=Y dropped=Z retries=R flushes=F`.
 
 ## Dependencies
 

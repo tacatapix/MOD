@@ -37,6 +37,14 @@ class KOTH_WebhookConfig
 	//! unbounded memory growth when Discord is down.
 	int    MaxQueueSize         = 200;
 
+	//! How many times to retry a failed POST (per batch). After exhausting
+	//! the retries, the batch is dropped and logged as a metric.
+	int    MaxRetries           = 5;
+
+	//! Maximum exponential backoff (seconds) between retries. Backoff grows
+	//! as 2^attempt but is clamped to this value. Healthy POSTs reset it.
+	int    MaxBackoffSec        = 60;
+
 	//! Which event types to forward to Discord.
 	bool   SendAnnounce         = true;
 	bool   SendStart            = true;
