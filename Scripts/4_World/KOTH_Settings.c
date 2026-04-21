@@ -19,6 +19,15 @@ class KOTH_Settings
 	//! Seconds between "Starting in X" warnings in the final minute.
 	int    FinalWarningEverySec     = 10;
 
+	//! Seconds between "sendo capturado" broadcasts while a capture is in
+	//! progress. 0 disables the periodic broadcast (only the initial
+	//! CaptureStarted message is sent).
+	int    CaptureProgressWarnEverySec = 30;
+
+	//! Seconds between "zona contestada" broadcasts while the zone is
+	//! contested. 0 disables this broadcast entirely.
+	int    ContestedWarnEverySec    = 45;
+
 	//! Seconds the pre-start countdown lasts before the zone goes ACTIVE.
 	int    PreStartCountdownSec     = 300;
 

@@ -21,7 +21,9 @@ class KOTH_ZoneInstance
 
 	ref array<string>                      PlayersInZone;          // DayZ player UIDs currently inside
 	ref map<string, ref KOTH_ZoneProgress> ProgressByPlayer;
-	int                                    LastWarnTickMs  = 0;
+	int                                    LastWarnTickMs         = 0; // pre-start warnings
+	int                                    LastProgressWarnTickMs = 0; // "sendo capturado" broadcast
+	int                                    LastContestedWarnTickMs= 0; // "zona contestada" broadcast
 
 	string                                 LeadingPlayerId;
 	string                                 LeadingPlayerName;

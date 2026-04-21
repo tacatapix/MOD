@@ -353,6 +353,7 @@ class KOTH_Manager
 			return;
 		}
 
+		TickActiveBroadcasts(zi, dt, captureSec);
 		SyncZone(zi);
 
 		// Out-of-time: nobody captured during the ACTIVE window.
@@ -361,6 +362,68 @@ class KOTH_Manager
 			KOTH_Log.Info("ACTIVE window expired on '" + zi.Def.Id + "' without a capture");
 			StartCooldown(zi);
 		}
+	}
+
+	//! Periodic "sendo capturado" / "contestado" broadcasts during the
+	//! ACTIVE phase. Cadence is controlled via settings.json:
+	//!   CaptureProgressWarnEverySec (0 disables)
+	//!   ContestedWarnEverySec       (0 disables)
+	//! Both broadcasts also hit Discord when the matching Send* flag is on
+	//! in webhook.json.
+	protected void TickActiveBroadcasts(KOTH_ZoneInstance zi, int dt, int captureSec)
+	{
+		int progressWarnMs   = m_Profile.Settings().CaptureProgressWarnEverySec * 1000;
+		int contestedWarnMs  = m_Profile.Settings().ContestedWarnEverySec       * 1000;
+
+		// Capture-in-progress broadcast. Only fires if someone is actually
+		// holding the lead (>0 progress) and we're not currently paused by
+		// a contested zone in classic mode.
+		if (progressWarnMs > 0 && zi.LeadingPlayerName != "" && zi.LeadingProgress > 0 && !zi.Contested)
+		{
+			zi.LastProgressWarnTickMs += dt;
+			if (zi.LastProgressWarnTickMs >= progressWarnMs)
+			{
+				zi.LastProgressWarnTickMs = 0;
+				int pct = (int)(zi.ProgressPct(captureSec) * 100.0);
+				string msg = Substitute(m_Profile.Messages().CaptureInProgress, zi.Def.Name,
+					0, 0, zi.LeadingPlayerName, "", zi.PlayersInZone.Count());
+				msg = ReplacePercent(msg, pct);
+				Broadcast(msg, "KOTH", m_Profile.Webhook().ColorCaptureBegin);
+				m_Webhook.CaptureProgress(zi.Def.Name, zi.LeadingPlayerName, zi.PlayersInZone.Count(), pct);
+			}
+		}
+		else
+		{
+			// Reset the tick so the next time someone takes the lead we
+			// broadcast at a predictable cadence rather than immediately.
+			zi.LastProgressWarnTickMs = 0;
+		}
+
+		// Contested broadcast.
+		if (contestedWarnMs > 0 && zi.Contested)
+		{
+			zi.LastContestedWarnTickMs += dt;
+			if (zi.LastContestedWarnTickMs >= contestedWarnMs)
+			{
+				zi.LastContestedWarnTickMs = 0;
+				string cmsg = Substitute(m_Profile.Messages().CaptureContested, zi.Def.Name,
+					0, 0, "", "", zi.PlayersInZone.Count());
+				Broadcast(cmsg, "KOTH", m_Profile.Webhook().ColorCaptureBegin);
+				m_Webhook.Contested(zi.Def.Name, zi.PlayersInZone.Count());
+			}
+		}
+		else
+		{
+			zi.LastContestedWarnTickMs = 0;
+		}
+	}
+
+	//! Substitute() doesn't know about {percent}; this wrapper handles it
+	//! without bloating the signature (only capture-in-progress uses it).
+	protected string ReplacePercent(string s, int pct)
+	{
+		s.Replace("{percent}", pct.ToString());
+		return s;
 	}
 
 	//! Used only by MODE_DOMINANT - returns a positive multiplier based on

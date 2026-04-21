@@ -41,6 +41,8 @@ class KOTH_WebhookConfig
 	bool   SendAnnounce         = true;
 	bool   SendStart            = true;
 	bool   SendCaptureBegin     = true;
+	bool   SendCaptureProgress  = false;  //!< off by default - can be spammy
+	bool   SendContested        = false;  //!< off by default - can be spammy
 	bool   SendCaptured         = true;
 	bool   SendEnded            = true;
 }

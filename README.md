@@ -17,6 +17,11 @@ Paragon-Arsenal, Juggernaut-Armor, etc.).
   - Event start (`Started`).
   - When someone begins capturing (`CaptureStarted`) — everyone on the
     server sees this, with the current player count in the zone.
+  - While a capture is in progress (`CaptureInProgress`) — periodic
+    broadcast with leader name, player count and percent complete. Cadence
+    configurable via `CaptureProgressWarnEverySec` in `settings.json`.
+  - While the zone is contested (`CaptureContested`) — periodic broadcast
+    with player count. Cadence via `ContestedWarnEverySec`.
   - Capture completion (`Captured`) with tier + kit information.
   - Event end (`Ended`).
 - **4 loot tiers** (T1 Trash → T4 Legendary), weighted so rolls feel dynamic
@@ -67,6 +72,8 @@ list of fields. Highlights:
 | `PreStartCountdownSec`    | `300`   | Announce window before ACTIVE                |
 | `PreStartWarningEverySec` | `60`    | Broadcast cadence during announce            |
 | `FinalWarningEverySec`    | `10`    | Broadcast cadence in the last minute         |
+| `CaptureProgressWarnEverySec` | `30` | "Sendo capturado" cadence (0 disables)     |
+| `ContestedWarnEverySec`   | `45`    | "Zona contestada" cadence (0 disables)       |
 | `CooldownSec`             | `1800`  | Between rounds                               |
 | `HotReloadIntervalSec`    | `15`    | `0` disables hot-reload                      |
 | `MaxConcurrentZones`      | `1`     | Increase for multi-zone servers              |
@@ -130,7 +137,8 @@ Four tiers, each with N kits. Example (abbreviated):
 
 ### `messages.json`
 Every broadcast string is templated. Supported placeholders:
-`{zone}`, `{seconds}`, `{minutes}`, `{player}`, `{tier}`, `{count}`.
+`{zone}`, `{seconds}`, `{minutes}`, `{player}`, `{tier}`, `{count}`,
+`{percent}` (only in `CaptureInProgress`).
 
 ### `webhook.json`
 Discord webhook. **Never commit this file.** Relevant fields:

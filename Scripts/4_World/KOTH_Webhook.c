@@ -101,6 +101,27 @@ class KOTH_Webhook
 		Enqueue(e);
 	}
 
+	void CaptureProgress(string zoneName, string player, int playersInZone, int percent)
+	{
+		if (!m_Cfg || !m_Cfg.Enabled || !m_Cfg.SendCaptureProgress) return;
+		KOTH_WebhookEmbed e = Embed("KOTH - captura em andamento",
+			"Zona: **" + zoneName + "**\nJogador: **" + player + "** (" + percent + "%)",
+			m_Cfg.ColorCaptureBegin);
+		AddField(e, "Jogadores na zona", playersInZone.ToString(), true);
+		AddField(e, "Progresso", percent.ToString() + "%", true);
+		Enqueue(e);
+	}
+
+	void Contested(string zoneName, int playersInZone)
+	{
+		if (!m_Cfg || !m_Cfg.Enabled || !m_Cfg.SendContested) return;
+		KOTH_WebhookEmbed e = Embed("KOTH - zona contestada",
+			"Zona: **" + zoneName + "**",
+			m_Cfg.ColorCaptureBegin);
+		AddField(e, "Jogadores na zona", playersInZone.ToString(), true);
+		Enqueue(e);
+	}
+
 	void Captured(string zoneName, string player, string tierLabel, string kitName)
 	{
 		if (!m_Cfg || !m_Cfg.Enabled || !m_Cfg.SendCaptured) return;
