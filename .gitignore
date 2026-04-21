@@ -1,0 +1,23 @@
+# Binary / packed mod output
+*.pbo
+*.pbo.*.bisign
+*.pbo.sig
+/@PackFazupix_KOTH/
+/addons/
+
+# Local tooling
+*.log
+*.tmp
+*.bak
+*.orig
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Never commit real webhook URLs or secrets
+profiles/
