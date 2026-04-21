@@ -48,6 +48,18 @@ class KOTH_Manager
 	void Init()
 	{
 		if (!GetGame().IsServer()) return;
+
+		// License gate: the manager only runs when the companion server mod
+		// (@PackFazupix_KOTH_Server) is loaded via -servermod=. Without it the
+		// override on KOTH_ServerLicense is absent and IsAuthorized() is false.
+		if (!KOTH_ServerLicense.Get().IsAuthorized())
+		{
+			KOTH_Log.Error("KOTH disabled: " + KOTH_ServerLicense.Get().GetDiagnostic());
+			KOTH_Log.Error("Add @PackFazupix_KOTH_Server to the server's -servermod= (NOT -mod=).");
+			return;
+		}
+		KOTH_Log.Info("License ok: " + KOTH_ServerLicense.Get().GetDiagnostic());
+
 		m_Profile.EnsureFiles();
 		m_Profile.LoadAll();
 		m_Webhook.SetConfig(m_Profile.Webhook());

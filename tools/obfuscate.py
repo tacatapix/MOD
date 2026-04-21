@@ -1,36 +1,29 @@
 #!/usr/bin/env python3
 """
-Lightweight obfuscator / minifier for Enforce Script (DayZ).
+Lightweight "hard to read" minifier for Enforce Script (DayZ).
 
-What it does:
-    * Strips line comments (//...)
-    * Strips block comments (/* ... */)
-    * Collapses blank lines and trims trailing whitespace
-    * Removes leading indentation (keeps one leading space inside
-      multi-token lines)
-    * Replaces multiple spaces/tabs with a single space outside of
-      string literals
-    * Preserves every identifier (class names, method names, RPC names)
-      so the mod's public surface is unchanged and CfgPatches / RestApi /
-      client<->server RPCs keep working.
+Scope is intentionally conservative because DayZ's Enforce Script parser
+is fragile with multi-line expressions and macro-style constructs:
 
-What it does NOT do:
-    * Does not rename identifiers. Enforce Script has no module system —
-      classes are resolved by name across translation units (CfgPatches,
-      RPC routing, layout lookups, ScriptRPC dispatch), so a blind rename
-      will brick the mod. A targeted renamer is possible but is a much
-      larger project (requires a real Enforce parser).
-    * Does not encrypt strings. Enforce's `string` type is read by the
-      engine as UTF-8; any encryption would need runtime decryption in
-      script and would hurt performance more than it helps security.
-    * Does not binarise anything. Binarisation of `config.cpp` requires
-      the Bohemia DayZ Tools on Windows.
+    * Strip single-line comments (// ...) outside string literals.
+    * Strip block comments (/* ... */) outside string literals.
+    * Strip blank lines and trailing whitespace.
+    * Drop leading indentation on every line.
+
+That's it. Whitespace *inside* expressions is left alone. The resulting
+file is single-column, comment-free, and hard to skim by eye, but every
+statement that was on its own line in the source is still on its own
+line in the output. This keeps the Enforce parser happy even with
+multi-line string concatenation and `foreach` pitfalls.
+
+The obfuscator never renames identifiers. Enforce Script resolves
+classes, methods, RPCs and CfgPatches entries by name across translation
+units, so any blind renamer would brick the mod. Treat this pass as
+cosmetic deterrence, not security - DayZ scripts always load as plain
+text inside the Bohemia script VM.
 
 Usage:
     python3 tools/obfuscate.py <source_dir> <output_dir>
-
-It walks <source_dir>, obfuscates every `.c` and `.layout` file, and
-copies everything else verbatim into <output_dir>.
 """
 
 import os
@@ -39,19 +32,12 @@ import shutil
 import sys
 
 
-# Files we actually rewrite. Everything else is copied verbatim.
 OBFUSCATE_EXTS = {".c", ".layout"}
 
-# Match // comments that are NOT inside a string. We approximate this by
-# eating characters before the `//` on each line in a second pass (see
-# strip_line_comments below). A full parser is overkill for a minifier.
 RE_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-RE_MULTI_BLANK   = re.compile(r"\n\s*\n+")
-RE_TRAILING_WS   = re.compile(r"[ \t]+\n")
-RE_MULTI_SPACE   = re.compile(r"[ \t]{2,}")
 
 
-def strip_line_comments(src: str) -> str:
+def _strip_line_comments(src: str) -> str:
     """Remove // comments while respecting string literals."""
     out = []
     i = 0
@@ -78,7 +64,7 @@ def strip_line_comments(src: str) -> str:
             i += 1
             continue
         if ch == "/" and nxt == "/":
-            # Skip until end of line but keep the newline.
+            # Skip to end-of-line but keep the newline.
             while i < n and src[i] != "\n":
                 i += 1
             continue
@@ -87,31 +73,8 @@ def strip_line_comments(src: str) -> str:
     return "".join(out)
 
 
-def obfuscate_source(src: str) -> str:
-    # Block comments first (greedy-safe because non-greedy DOTALL).
-    src = RE_BLOCK_COMMENT.sub("", src)
-    src = strip_line_comments(src)
-    src = RE_TRAILING_WS.sub("\n", src)
-    src = RE_MULTI_BLANK.sub("\n", src)
-    # Collapse runs of whitespace *outside* strings. Cheap approximation:
-    # only touch leading whitespace on each line plus runs of 2+ spaces
-    # that don't sit between a leading `"` and the next `"`.
-    lines = []
-    for line in src.split("\n"):
-        stripped = line.lstrip()
-        if stripped:
-            # Leave one space so tokens like `return x;` stay readable when
-            # concatenated with previous content in an IDE, but we drop the
-            # original indentation level.
-            lines.append(stripped)
-    joined = "\n".join(lines)
-    # Now kill leftover double-spaces that aren't inside a string.
-    joined = _collapse_spaces_outside_strings(joined)
-    # Strip trailing blank lines/newlines.
-    return joined.strip() + "\n"
-
-
-def _collapse_spaces_outside_strings(src: str) -> str:
+def _strip_block_comments(src: str) -> str:
+    """Remove /* ... */ comments while respecting string literals."""
     out = []
     i = 0
     n = len(src)
@@ -136,15 +99,31 @@ def _collapse_spaces_outside_strings(src: str) -> str:
             out.append(ch)
             i += 1
             continue
-        if ch in " \t":
-            # Collapse runs of spaces/tabs to a single space outside strings.
-            out.append(" ")
-            while i < n and src[i] in " \t":
-                i += 1
+        if ch == "/" and nxt == "*":
+            j = src.find("*/", i + 2)
+            if j == -1:
+                # Unterminated, leave the rest as-is (shouldn't happen).
+                out.append(src[i:])
+                break
+            i = j + 2
             continue
         out.append(ch)
         i += 1
     return "".join(out)
+
+
+def obfuscate_source(src: str) -> str:
+    src = _strip_block_comments(src)
+    src = _strip_line_comments(src)
+    lines = []
+    for line in src.split("\n"):
+        # Drop leading whitespace so the output is flush to the left column.
+        # Trailing whitespace is also stripped. Empty lines disappear.
+        stripped = line.rstrip()
+        stripped = stripped.lstrip()
+        if stripped:
+            lines.append(stripped)
+    return "\n".join(lines) + "\n"
 
 
 def process_tree(src_dir: str, dst_dir: str) -> None:
@@ -166,9 +145,9 @@ def process_tree(src_dir: str, dst_dir: str) -> None:
             ext = os.path.splitext(name)[1].lower()
             if ext in OBFUSCATE_EXTS:
                 with open(src_path, "r", encoding="utf-8") as f:
-                    src = f.read()
+                    data = f.read()
                 with open(dst_path, "w", encoding="utf-8", newline="\n") as f:
-                    f.write(obfuscate_source(src))
+                    f.write(obfuscate_source(data))
                 touched += 1
             else:
                 shutil.copy2(src_path, dst_path)

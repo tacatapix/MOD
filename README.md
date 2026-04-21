@@ -240,8 +240,8 @@ DayZ's script VM.
 
 ## Dependencies
 
-- **CommunityFramework** (`@CF`) — required. Used for the RPC pipeline and
-  future permission-gated admin commands.
+- **Nothing else required.** The mod is self-contained and talks to the
+  engine via vanilla `ScriptRPC` / `RestApi`.
 - Optional but recommended (not required for the mod to load):
   - `@Dabs-Framework` — nicer in-game notifications if present; the mod
     falls back to its own toast if not.

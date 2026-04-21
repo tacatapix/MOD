@@ -300,9 +300,8 @@ class KOTH_Webhook
 			for (int i = 0; i < m_InFlightRetries; i++) backoff *= 2;
 			if (backoff > m_Cfg.MaxBackoffSec) backoff = m_Cfg.MaxBackoffSec;
 			m_BackoffMs = backoff * 1000;
-			KOTH_Log.Warn("[webhook] POST failed (" + reason + ") - retry "
-				+ m_InFlightRetries + "/" + m_Cfg.MaxRetries
-				+ " in " + backoff + "s");
+			string wmsg = "[webhook] POST failed (" + reason + ") - retry " + m_InFlightRetries.ToString() + "/" + m_Cfg.MaxRetries.ToString() + " in " + backoff.ToString() + "s";
+			KOTH_Log.Warn(wmsg);
 		}
 		else
 		{
@@ -311,8 +310,8 @@ class KOTH_Webhook
 			m_StatDropped += dropped;
 			m_InFlightBatch.Clear();
 			m_InFlightRetries = 0;
-			KOTH_Log.Error("[webhook] POST permanently failed (" + reason
-				+ ") - dropped " + dropped + " embed(s)");
+			string emsg = "[webhook] POST permanently failed (" + reason + ") - dropped " + dropped.ToString() + " embed(s)";
+			KOTH_Log.Error(emsg);
 		}
 		MaybeLogMetrics();
 	}

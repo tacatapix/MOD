@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# Produce the obfuscated + signed build:
-#   dist/@PackFazupix_KOTH_Obfuscated/
-#     mod.cpp
-#     addons/PackFazupix_KOTH.pbo
-#     addons/PackFazupix_KOTH.pbo.<keyname>.bisign
-#     keys/<keyname>.bikey
+# Build the obfuscated + signed dual-mod distribution:
 #
-# Requires armake2 in $PATH (cargo install --git \
-#   https://github.com/KoffeinFlummi/armake2 armake2).
+#   dist/@PackFazupix_KOTH/
+#       mod.cpp
+#       addons/PackFazupix_KOTH.pbo
+#       addons/PackFazupix_KOTH.pbo.<key>.bisign
+#       keys/<key>.bikey
+#
+#   dist/@PackFazupix_KOTH_Server/
+#       mod.cpp
+#       addons/PackFazupix_KOTH_Server.pbo
+#       addons/PackFazupix_KOTH_Server.pbo.<key>.bisign
+#       keys/<key>.bikey
+#
+# Requires armake2 in $PATH:
+#   cargo install --git https://github.com/KoffeinFlummi/armake2 armake2
 
 set -euo pipefail
 
@@ -15,52 +22,77 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 KEYNAME="${1:-Private}"
 
-STAGE_RAW="$ROOT/dist/staging/PackFazupix_KOTH"
-STAGE_OBF="$ROOT/dist/staging_obf/PackFazupix_KOTH"
-OUT="$ROOT/dist/@PackFazupix_KOTH_Obfuscated"
-KEYDIR="$ROOT/dist/keys"
-
 command -v armake2 >/dev/null || {
-    echo "armake2 not found in PATH. Install with:"
+    echo "armake2 not found in PATH."
+    echo "Install with:"
     echo "  cargo install --git https://github.com/KoffeinFlummi/armake2 armake2"
     exit 1
 }
 
-# 1) Refresh the raw staging (for reproducibility).
-rm -rf "$STAGE_RAW"
-mkdir -p "$STAGE_RAW"
-cp "$ROOT/config.cpp"     "$STAGE_RAW/"
-cp -r "$ROOT/Scripts"      "$STAGE_RAW/"
-cp -r "$ROOT/GUI"          "$STAGE_RAW/"
-printf 'PackFazupix_KOTH' > "$STAGE_RAW/\$PBOPREFIX\$"
+STAGE_CLIENT_RAW="$ROOT/dist/staging/PackFazupix_KOTH"
+STAGE_CLIENT_OBF="$ROOT/dist/staging_obf/PackFazupix_KOTH"
+OUT_CLIENT="$ROOT/dist/@PackFazupix_KOTH"
 
-# 2) Obfuscate into the obf staging.
-python3 "$HERE/obfuscate.py" "$STAGE_RAW" "$STAGE_OBF"
-cp "$STAGE_RAW/\$PBOPREFIX\$" "$STAGE_OBF/\$PBOPREFIX\$"
+STAGE_SERVER_RAW="$ROOT/dist/staging/PackFazupix_KOTH_Server"
+STAGE_SERVER_OBF="$ROOT/dist/staging_obf/PackFazupix_KOTH_Server"
+OUT_SERVER="$ROOT/dist/@PackFazupix_KOTH_Server"
 
-# 3) Generate the keypair (once per keyname) and the output mod layout.
+KEYDIR="$ROOT/dist/keys"
+
+# ----------------------------------------------------------------------------
+# 1. Stage the main (client+server) mod.
+# ----------------------------------------------------------------------------
+rm -rf "$STAGE_CLIENT_RAW"
+mkdir -p "$STAGE_CLIENT_RAW"
+cp    "$ROOT/config.cpp" "$STAGE_CLIENT_RAW/"
+cp -r "$ROOT/Scripts"    "$STAGE_CLIENT_RAW/"
+cp -r "$ROOT/GUI"        "$STAGE_CLIENT_RAW/"
+printf 'PackFazupix_KOTH' > "$STAGE_CLIENT_RAW/\$PBOPREFIX\$"
+
+python3 "$HERE/obfuscate.py" "$STAGE_CLIENT_RAW" "$STAGE_CLIENT_OBF"
+cp "$STAGE_CLIENT_RAW/\$PBOPREFIX\$" "$STAGE_CLIENT_OBF/\$PBOPREFIX\$"
+
+# ----------------------------------------------------------------------------
+# 2. Stage the server-only mod.
+# ----------------------------------------------------------------------------
+rm -rf "$STAGE_SERVER_RAW"
+mkdir -p "$STAGE_SERVER_RAW"
+cp -r "$ROOT/ServerMod/PackFazupix_KOTH_Server/." "$STAGE_SERVER_RAW/"
+
+python3 "$HERE/obfuscate.py" "$STAGE_SERVER_RAW" "$STAGE_SERVER_OBF"
+cp "$STAGE_SERVER_RAW/\$PBOPREFIX\$" "$STAGE_SERVER_OBF/\$PBOPREFIX\$"
+
+# ----------------------------------------------------------------------------
+# 3. Keypair.
+# ----------------------------------------------------------------------------
 mkdir -p "$KEYDIR"
 if [ ! -f "$KEYDIR/$KEYNAME.biprivatekey" ]; then
     ( cd "$KEYDIR" && armake2 keygen -v "$KEYNAME" )
 fi
 
-rm -rf "$OUT"
-mkdir -p "$OUT/addons" "$OUT/keys"
-cp "$ROOT/mod.cpp"              "$OUT/"
-cp "$KEYDIR/$KEYNAME.bikey"     "$OUT/keys/"
+# ----------------------------------------------------------------------------
+# 4. Pack + sign both mods.
+# ----------------------------------------------------------------------------
+build_mod () {
+    local stage="$1" outdir="$2" pboname="$3" modcpp="$4"
+    rm -rf "$outdir"
+    mkdir -p "$outdir/addons" "$outdir/keys"
+    cp "$modcpp"                "$outdir/"
+    cp "$KEYDIR/$KEYNAME.bikey" "$outdir/keys/"
+    armake2 pack -f "$stage" "$outdir/addons/$pboname.pbo"
+    armake2 sign -f "$KEYDIR/$KEYNAME.biprivatekey" "$outdir/addons/$pboname.pbo"
+    armake2 verify "$KEYDIR/$KEYNAME.bikey" \
+        "$outdir/addons/$pboname.pbo" \
+        "$outdir/addons/$pboname.pbo.$KEYNAME.bisign"
+    echo "ok: $outdir/addons/$pboname.pbo"
+}
 
-# 4) Pack + sign.
-armake2 pack -f "$STAGE_OBF" "$OUT/addons/PackFazupix_KOTH.pbo"
-armake2 sign -f "$KEYDIR/$KEYNAME.biprivatekey" "$OUT/addons/PackFazupix_KOTH.pbo"
-
-# 5) Verify the signature matches the public key.
-armake2 verify "$KEYDIR/$KEYNAME.bikey" "$OUT/addons/PackFazupix_KOTH.pbo" \
-    "$OUT/addons/PackFazupix_KOTH.pbo.$KEYNAME.bisign"
+build_mod "$STAGE_CLIENT_OBF" "$OUT_CLIENT" "PackFazupix_KOTH" \
+    "$ROOT/mod.cpp"
+build_mod "$STAGE_SERVER_OBF" "$OUT_SERVER" "PackFazupix_KOTH_Server" \
+    "$ROOT/ServerMod/mod.cpp"
 
 echo
-echo "ok: $OUT"
-echo "    addons/PackFazupix_KOTH.pbo"
-echo "    addons/PackFazupix_KOTH.pbo.$KEYNAME.bisign"
-echo "    keys/$KEYNAME.bikey"
-echo
-echo "Private key lives at $KEYDIR/$KEYNAME.biprivatekey - keep it secret!"
+echo "==> Distribute to players:    $OUT_CLIENT"
+echo "==> Server ONLY (secret):     $OUT_SERVER"
+echo "==> Private key (NEVER share): $KEYDIR/$KEYNAME.biprivatekey"
