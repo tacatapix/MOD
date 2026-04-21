@@ -4,6 +4,7 @@
 *.pbo.sig
 /@PackFazupix_KOTH/
 /addons/
+/dist/
 
 # Local tooling
 *.log

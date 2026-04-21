@@ -167,6 +167,44 @@ The webhook is **hardened against downtime and rate-limits**:
 - Metric log line every 10 flushes:
   `[KOTH][INFO][webhook] metrics queued=X sent=Y dropped=Z retries=R flushes=F`.
 
+## Packing into a PBO
+
+Two supported paths — pick based on what you have installed.
+
+### Linux / macOS — quick unsigned PBO (for testing)
+
+```bash
+./tools/pack_linux.sh
+```
+
+Produces `dist/@PackFazupix_KOTH/` with `addons/PackFazupix_KOTH.pbo` ready
+to drop into your server's mod folder. The PBO is **uncompressed and
+unsigned**. It works on any DayZ server you control; it will be rejected
+by DSA-key-protected public servers and cannot be published to the Steam
+Workshop as-is.
+
+### Windows — official DayZ Tools build (for production / Workshop)
+
+```powershell
+pwsh tools/pack_windows.ps1
+# or just double-click
+tools\pack_windows.bat
+```
+
+Requires **DayZ Tools** from Steam (free). The script drives
+`AddonBuilder.exe` so you get a properly-binarised PBO that can be signed
+with `DSSignFile` and uploaded to the Workshop.
+
+Either path produces the same mod folder layout:
+
+```
+dist/@PackFazupix_KOTH/
+├── mod.cpp
+├── keys/                       (drop your .bikey here for DSA-signed servers)
+└── addons/
+    └── PackFazupix_KOTH.pbo
+```
+
 ## Dependencies
 
 - **CommunityFramework** (`@CF`) — required. Used for the RPC pipeline and
