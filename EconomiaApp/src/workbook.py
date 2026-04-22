@@ -241,6 +241,29 @@ class Sheet:
         """Return a TSV string of the current sheet contents."""
         return "\n".join("\t".join(_cell_to_str(c) for c in r) for r in self.data)
 
+    # ------------------------------------------------------------------
+    # Row / column edits (for the interactive spreadsheet editor)
+    # ------------------------------------------------------------------
+    def insert_row(self, row: int) -> None:
+        """Insert a blank row *before* ``row`` (1-based)."""
+        row = max(1, min(row, self.max_row + 1))
+        self.data.insert(row - 1, [])
+
+    def delete_row(self, row: int) -> None:
+        if 1 <= row <= self.max_row:
+            del self.data[row - 1]
+
+    def insert_col(self, col: int) -> None:
+        """Insert a blank column *before* ``col`` (1-based)."""
+        for r in self.data:
+            if len(r) >= col - 1:
+                r.insert(col - 1, None)
+
+    def delete_col(self, col: int) -> None:
+        for r in self.data:
+            if len(r) >= col:
+                del r[col - 1]
+
 
 class Workbook:
     """In-memory workbook loaded from an .xlsm file."""
@@ -305,3 +328,68 @@ class Workbook:
 
     def names(self) -> List[str]:
         return list(self.sheets.keys())
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+    def save_as(self, dest_path: str) -> str:
+        """Write every in-memory sheet to an .xlsx file.
+
+        Returns the absolute path written.  ``.xlsx`` is used regardless
+        of the extension given, so VBA code is never shipped back.
+        """
+        import openpyxl
+        from openpyxl.utils.exceptions import IllegalCharacterError
+
+        wb = openpyxl.Workbook()
+        # Remove the default sheet.
+        default = wb.active
+        wb.remove(default)
+
+        for name, sheet in self.sheets.items():
+            # openpyxl sheet names are limited to 31 chars and cannot
+            # contain ``[]:*?/\\``.  Trim instead of failing.
+            safe = name
+            for bad in "[]:*?/\\":
+                safe = safe.replace(bad, " ")
+            safe = safe[:31] or "Sheet"
+            ws = wb.create_sheet(title=safe)
+            for row in sheet.data:
+                try:
+                    ws.append([_cell_to_str(v) if v is not None else None for v in row])
+                except IllegalCharacterError:
+                    ws.append([
+                        (_cell_to_str(v).replace("\x00", "") if v is not None else None)
+                        for v in row
+                    ])
+
+        if not dest_path.lower().endswith(".xlsx"):
+            dest_path += ".xlsx"
+        os.makedirs(os.path.dirname(os.path.abspath(dest_path)) or ".", exist_ok=True)
+        wb.save(dest_path)
+        wb.close()
+        return os.path.abspath(dest_path)
+
+    def save_sheet_as(self, sheet_name: str, dest_path: str) -> str:
+        """Save a single sheet to its own .xlsx file."""
+        import openpyxl
+        from openpyxl.utils.exceptions import IllegalCharacterError
+
+        sheet = self.sheet(sheet_name)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = sheet_name[:31] or "Sheet"
+        for row in sheet.data:
+            try:
+                ws.append([_cell_to_str(v) if v is not None else None for v in row])
+            except IllegalCharacterError:
+                ws.append([
+                    (_cell_to_str(v).replace("\x00", "") if v is not None else None)
+                    for v in row
+                ])
+        if not dest_path.lower().endswith(".xlsx"):
+            dest_path += ".xlsx"
+        os.makedirs(os.path.dirname(os.path.abspath(dest_path)) or ".", exist_ok=True)
+        wb.save(dest_path)
+        wb.close()
+        return os.path.abspath(dest_path)

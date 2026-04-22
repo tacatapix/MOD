@@ -62,39 +62,68 @@ def _save_text(filename: str, text: str) -> str:
 # Sheet viewer / editor
 # ---------------------------------------------------------------------------
 class SheetViewer(tk.Toplevel):
-    """Simple read/edit view of a ``Sheet``.
+    """Excel-style read/edit view of a :class:`Sheet`.
 
-    Uses a ``ttk.Treeview`` for speed because some sheets (notably the
-    ``Types`` sheet) are huge.  Editing a cell happens in-place through
-    double-click.
+    Navigation and editing shortcuts (same as Excel/LibreOffice):
+
+    * click a cell to select it;
+    * double-click, ``F2`` or ``Enter`` to edit;
+    * start typing to replace the contents;
+    * ``Enter`` commits and moves down, ``Tab`` commits and moves right,
+      ``Escape`` cancels;
+    * arrow keys move the selection;
+    * ``Ctrl+Z`` undoes the last change;
+    * ``Delete`` clears the selected cell;
+    * the toolbar has insert/remove row, insert/remove column and
+      ``Salvar planilha`` (writes to ``Saida\\Economia_editada.xlsx``).
     """
 
-    MAX_ROWS = 5000  # safety cap for huge sheets
+    MAX_ROWS = 20000  # safety cap; big sheets are paginated
 
-    def __init__(self, master: tk.Tk, sheet: Sheet) -> None:
+    def __init__(self, master: tk.Tk, sheet: Sheet, on_save_all=None) -> None:
         super().__init__(master)
         self.title(f"{APP_TITLE} — {sheet.name}")
-        self.geometry("1100x650")
+        self.geometry("1200x700")
         self.sheet = sheet
+        self._on_save_all = on_save_all
+        self._undo_stack: List[tuple] = []  # (row, col, old_value)
+        self._selected: Optional[tuple] = None  # (row, col) 1-based
+        self._editing = False
         self._build()
 
     # -- UI ----------------------------------------------------------------
     def _build(self) -> None:
-        top = tk.Frame(self)
-        top.pack(fill="x", padx=4, pady=4)
-        tk.Label(top, text=f"Planilha: {self.sheet.name}").pack(side="left")
-        tk.Label(
-            top,
-            text=f"  Linhas: {self.sheet.max_row}  Colunas: {self.sheet.max_col}",
-        ).pack(side="left")
+        tb = tk.Frame(self, bg="#eceff1")
+        tb.pack(fill="x")
+        self._mk_tb_btn(tb, "Salvar planilha", self._save_sheet, "#2e7d32")
+        self._mk_tb_btn(tb, "Inserir linha ↑", self._insert_row_above)
+        self._mk_tb_btn(tb, "Inserir linha ↓", self._insert_row_below)
+        self._mk_tb_btn(tb, "Excluir linha", self._delete_row, "#c62828")
+        self._mk_tb_btn(tb, "Inserir coluna ←", self._insert_col_left)
+        self._mk_tb_btn(tb, "Inserir coluna →", self._insert_col_right)
+        self._mk_tb_btn(tb, "Excluir coluna", self._delete_col, "#c62828")
+        self._mk_tb_btn(tb, "Desfazer (Ctrl+Z)", self._undo)
 
-        truncated = self.sheet.max_row > self.MAX_ROWS
-        if truncated:
-            tk.Label(
-                top,
-                text=f"(exibindo as primeiras {self.MAX_ROWS} linhas para performance)",
-                fg="#c07",
-            ).pack(side="left")
+        info = tk.Frame(self)
+        info.pack(fill="x", padx=6, pady=(4, 2))
+        self._info = tk.StringVar()
+        tk.Label(info, textvariable=self._info, font=("Segoe UI", 10)).pack(
+            side="left"
+        )
+        self._cell_label = tk.StringVar(value="-")
+        tk.Label(info, textvariable=self._cell_label, font=("Segoe UI", 10, "bold")).pack(
+            side="left", padx=16
+        )
+
+        # Formula bar.
+        fb = tk.Frame(self)
+        fb.pack(fill="x", padx=6, pady=(0, 4))
+        tk.Label(fb, text="Conteúdo:", font=("Segoe UI", 10)).pack(side="left")
+        self._formula_var = tk.StringVar()
+        fe = tk.Entry(fb, textvariable=self._formula_var, font=("Segoe UI", 10))
+        fe.pack(side="left", fill="x", expand=True, padx=6)
+        fe.bind("<Return>", self._commit_formula_bar)
+        self._formula_entry = fe
 
         ncols = max(self.sheet.max_col, 1)
         cols = [f"c{i+1}" for i in range(ncols)]
@@ -103,11 +132,17 @@ class SheetViewer(tk.Toplevel):
         tree_frame.pack(fill="both", expand=True, padx=4, pady=4)
 
         self.tree = ttk.Treeview(
-            tree_frame, columns=cols, show="headings", height=30
+            tree_frame,
+            columns=cols,
+            show="tree headings",
+            height=30,
+            selectmode="browse",
         )
+        self.tree.heading("#0", text="#")
+        self.tree.column("#0", width=60, stretch=False, anchor="e")
         for i, c in enumerate(cols, 1):
             self.tree.heading(c, text=self._column_letter(i))
-            self.tree.column(c, width=100, stretch=False)
+            self.tree.column(c, width=110, stretch=False)
 
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
@@ -118,14 +153,67 @@ class SheetViewer(tk.Toplevel):
         tree_frame.rowconfigure(0, weight=1)
         tree_frame.columnconfigure(0, weight=1)
 
-        self.tree.bind("<Double-1>", self._edit_cell)
+        # Populate rows (capped).
+        self._populate_rows()
 
+        # Event bindings.
+        self.tree.bind("<Button-1>", self._on_click)
+        self.tree.bind("<Double-1>", self._on_dbl_click)
+        self.tree.bind("<Key>", self._on_key)
+        self.tree.bind("<F2>", self._edit_selected)
+        self.tree.bind("<Return>", self._edit_selected)
+        self.tree.bind("<Delete>", self._delete_cell)
+        self.tree.bind("<BackSpace>", self._delete_cell)
+        self.tree.bind("<Up>", lambda e: self._move(-1, 0))
+        self.tree.bind("<Down>", lambda e: self._move(1, 0))
+        self.tree.bind("<Left>", lambda e: self._move(0, -1))
+        self.tree.bind("<Right>", lambda e: self._move(0, 1))
+        self.tree.bind("<Tab>", lambda e: self._move(0, 1) or "break")
+        self.tree.bind("<Control-z>", lambda e: self._undo())
+        self.tree.bind("<Control-Z>", lambda e: self._undo())
+
+        self.tree.tag_configure("sel", background="#ffe082")
+        self._refresh_info()
+        self._select(1, 1)
+        self.tree.focus_set()
+
+    def _mk_tb_btn(self, parent, text, cmd, bg="#546e7a"):
+        b = tk.Button(
+            parent,
+            text=text,
+            command=cmd,
+            bg=bg,
+            fg="white",
+            activebackground="#263238",
+            activeforeground="white",
+            font=("Segoe UI", 9, "bold"),
+            bd=0,
+            padx=10,
+            pady=4,
+        )
+        b.pack(side="left", padx=2, pady=4)
+        return b
+
+    def _populate_rows(self) -> None:
+        self.tree.delete(*self.tree.get_children())
+        ncols = max(self.sheet.max_col, 1)
         limit = min(self.sheet.max_row, self.MAX_ROWS)
         for i in range(limit):
             row = self.sheet.data[i]
             vals = [(row[j] if j < len(row) else "") for j in range(ncols)]
             vals = ["" if v is None else str(v) for v in vals]
-            self.tree.insert("", "end", iid=str(i + 1), values=vals)
+            self.tree.insert("", "end", iid=str(i + 1), text=str(i + 1), values=vals)
+
+        # Ensure there are columns matching the underlying data.
+        current = list(self.tree["columns"])
+        needed = [f"c{i+1}" for i in range(ncols)]
+        if current != needed:
+            self.tree["columns"] = needed
+            self.tree.heading("#0", text="#")
+            self.tree.column("#0", width=60, stretch=False, anchor="e")
+            for i, c in enumerate(needed, 1):
+                self.tree.heading(c, text=self._column_letter(i))
+                self.tree.column(c, width=110, stretch=False)
 
     @staticmethod
     def _column_letter(col: int) -> str:
@@ -135,30 +223,275 @@ class SheetViewer(tk.Toplevel):
             s = chr(65 + rem) + s
         return s
 
-    def _edit_cell(self, event) -> None:
+    # -- selection helpers ---------------------------------------------
+    def _refresh_info(self) -> None:
+        trunc = ""
+        if self.sheet.max_row > self.MAX_ROWS:
+            trunc = f"  (mostrando {self.MAX_ROWS}/{self.sheet.max_row} linhas)"
+        self._info.set(
+            f"Planilha: {self.sheet.name}  |  Linhas: {self.sheet.max_row}  "
+            f"Colunas: {self.sheet.max_col}{trunc}"
+        )
+
+    def _select(self, row: int, col: int) -> None:
+        row = max(1, min(row, min(self.sheet.max_row, self.MAX_ROWS)))
+        col = max(1, min(col, self.sheet.max_col or 1))
+        prev = self._selected
+        self._selected = (row, col)
+        # Update tags to highlight the row.
+        if prev:
+            try:
+                self.tree.item(str(prev[0]), tags=())
+            except tk.TclError:
+                pass
+        try:
+            self.tree.item(str(row), tags=("sel",))
+        except tk.TclError:
+            pass
+        self.tree.selection_set(str(row))
+        self.tree.focus(str(row))
+        self.tree.see(str(row))
+        self._cell_label.set(f"{self._column_letter(col)}{row}")
+        self._formula_var.set(self.sheet.cell_str(row, col))
+
+    def _move(self, dr: int, dc: int) -> None:
+        if self._editing or not self._selected:
+            return
+        r, c = self._selected
+        self._select(r + dr, c + dc)
+
+    # -- event handlers ------------------------------------------------
+    def _on_click(self, event) -> None:
         row_id = self.tree.identify_row(event.y)
         col_id = self.tree.identify_column(event.x)
-        if not row_id or not col_id:
+        if not row_id:
             return
-        col_index = int(col_id.replace("#", "")) - 1
-        if col_index < 0:
-            return
-        x, y, w, h = self.tree.bbox(row_id, col_id)
-        current = self.tree.set(row_id, self.tree["columns"][col_index])
+        col_index = int(col_id.replace("#", "")) if col_id else 1
+        # column #0 is the row-number pseudo-column
+        if col_index <= 0:
+            col_index = 1
+        self._select(int(row_id), col_index)
 
-        entry = tk.Entry(self.tree)
-        entry.place(x=x, y=y, width=w, height=h)
-        entry.insert(0, current)
+    def _on_dbl_click(self, event) -> None:
+        self._on_click(event)
+        self._edit_selected(event)
+
+    def _on_key(self, event) -> None:
+        if self._editing or not self._selected:
+            return
+        # Printable character starts edit.
+        if event.char and event.char.isprintable() and not (event.state & 0x4):  # no Ctrl
+            self._edit_selected(event, prefill=event.char)
+            return "break"
+
+    def _edit_selected(self, _event=None, *, prefill: Optional[str] = None) -> None:
+        if not self._selected:
+            return
+        row, col = self._selected
+        col_id = f"#{col}"
+        try:
+            bbox = self.tree.bbox(str(row), col_id)
+        except tk.TclError:
+            bbox = None
+        if not bbox:
+            # scroll and retry
+            self.tree.see(str(row))
+            self.update_idletasks()
+            bbox = self.tree.bbox(str(row), col_id)
+            if not bbox:
+                return
+        x, y, w, h = bbox
+        current = self.sheet.cell_str(row, col)
+        entry = tk.Entry(self.tree, font=("Segoe UI", 10))
+        entry.place(x=x, y=y, width=max(w, 80), height=h)
+        if prefill is not None:
+            entry.insert(0, prefill)
+        else:
+            entry.insert(0, current)
+            entry.select_range(0, "end")
         entry.focus()
+        self._editing = True
 
-        def commit(_evt=None):
+        def commit(_evt=None, advance: tuple = (1, 0)):
             new = entry.get()
-            self.tree.set(row_id, self.tree["columns"][col_index], new)
-            self.sheet.set(int(row_id), col_index + 1, new)
+            if new != current:
+                self._push_undo(row, col, self.sheet.cell(row, col))
+                self.sheet.set(row, col, new)
+                cols = list(self.tree["columns"])
+                if col - 1 < len(cols):
+                    self.tree.set(str(row), cols[col - 1], new)
             entry.destroy()
+            self._editing = False
+            self._move(*advance)
 
-        entry.bind("<Return>", commit)
-        entry.bind("<FocusOut>", lambda e: entry.destroy())
+        def cancel(_evt=None):
+            entry.destroy()
+            self._editing = False
+            self.tree.focus_set()
+
+        entry.bind("<Return>", lambda e: commit(advance=(1, 0)))
+        entry.bind("<Tab>", lambda e: commit(advance=(0, 1)) or "break")
+        entry.bind("<Shift-Tab>", lambda e: commit(advance=(0, -1)) or "break")
+        entry.bind("<Escape>", cancel)
+        entry.bind("<FocusOut>", lambda e: commit(advance=(0, 0)))
+
+    def _commit_formula_bar(self, _evt=None) -> None:
+        if not self._selected:
+            return
+        row, col = self._selected
+        new = self._formula_var.get()
+        old = self.sheet.cell(row, col)
+        if _cell_to_str_equivalent(old, new):
+            return
+        self._push_undo(row, col, old)
+        self.sheet.set(row, col, new)
+        cols = list(self.tree["columns"])
+        if col - 1 < len(cols):
+            self.tree.set(str(row), cols[col - 1], new)
+        self.tree.focus_set()
+
+    def _delete_cell(self, _evt=None) -> None:
+        if self._editing or not self._selected:
+            return
+        row, col = self._selected
+        old = self.sheet.cell(row, col)
+        if old in ("", None):
+            return
+        self._push_undo(row, col, old)
+        self.sheet.set(row, col, "")
+        cols = list(self.tree["columns"])
+        if col - 1 < len(cols):
+            self.tree.set(str(row), cols[col - 1], "")
+        self._formula_var.set("")
+
+    # -- row / column ops ---------------------------------------------
+    def _insert_row_above(self) -> None:
+        if not self._selected:
+            return
+        row, _ = self._selected
+        self.sheet.insert_row(row)
+        self._push_undo("insert_row", row)
+        self._populate_rows()
+        self._refresh_info()
+        self._select(row, self._selected[1] if self._selected else 1)
+
+    def _insert_row_below(self) -> None:
+        if not self._selected:
+            return
+        row, _ = self._selected
+        self.sheet.insert_row(row + 1)
+        self._push_undo("insert_row", row + 1)
+        self._populate_rows()
+        self._refresh_info()
+        self._select(row + 1, self._selected[1] if self._selected else 1)
+
+    def _delete_row(self) -> None:
+        if not self._selected:
+            return
+        row, _ = self._selected
+        if not messagebox.askyesno(APP_TITLE, f"Excluir linha {row}?"):
+            return
+        old_row = list(self.sheet.data[row - 1]) if row <= self.sheet.max_row else []
+        self.sheet.delete_row(row)
+        self._push_undo("delete_row", row, old_row)
+        self._populate_rows()
+        self._refresh_info()
+        self._select(min(row, self.sheet.max_row), self._selected[1])
+
+    def _insert_col_left(self) -> None:
+        if not self._selected:
+            return
+        _, col = self._selected
+        self.sheet.insert_col(col)
+        self._push_undo("insert_col", col)
+        self._populate_rows()
+        self._refresh_info()
+
+    def _insert_col_right(self) -> None:
+        if not self._selected:
+            return
+        _, col = self._selected
+        self.sheet.insert_col(col + 1)
+        self._push_undo("insert_col", col + 1)
+        self._populate_rows()
+        self._refresh_info()
+
+    def _delete_col(self) -> None:
+        if not self._selected:
+            return
+        _, col = self._selected
+        letter = self._column_letter(col)
+        if not messagebox.askyesno(APP_TITLE, f"Excluir coluna {letter}?"):
+            return
+        old_col = [
+            (r[col - 1] if len(r) >= col else None) for r in self.sheet.data
+        ]
+        self.sheet.delete_col(col)
+        self._push_undo("delete_col", col, old_col)
+        self._populate_rows()
+        self._refresh_info()
+
+    # -- undo ---------------------------------------------------------
+    def _push_undo(self, *args) -> None:
+        self._undo_stack.append(args)
+        if len(self._undo_stack) > 500:
+            self._undo_stack = self._undo_stack[-500:]
+
+    def _undo(self, _evt=None) -> None:
+        if self._editing or not self._undo_stack:
+            return
+        action = self._undo_stack.pop()
+        kind = action[0]
+        if isinstance(kind, int):  # cell edit: (row, col, old_value)
+            r, c, old = action
+            self.sheet.set(r, c, old)
+            cols = list(self.tree["columns"])
+            if c - 1 < len(cols):
+                self.tree.set(
+                    str(r), cols[c - 1], "" if old in ("", None) else str(old)
+                )
+            self._select(r, c)
+        elif kind == "insert_row":
+            _, r = action
+            self.sheet.delete_row(r)
+            self._populate_rows()
+            self._refresh_info()
+        elif kind == "delete_row":
+            _, r, old = action
+            self.sheet.insert_row(r)
+            for i, v in enumerate(old, 1):
+                if v not in ("", None):
+                    self.sheet.set(r, i, v)
+            self._populate_rows()
+            self._refresh_info()
+        elif kind == "insert_col":
+            _, c = action
+            self.sheet.delete_col(c)
+            self._populate_rows()
+            self._refresh_info()
+        elif kind == "delete_col":
+            _, c, old = action
+            self.sheet.insert_col(c)
+            for i, v in enumerate(old, 1):
+                if v not in ("", None):
+                    self.sheet.set(i, c, v)
+            self._populate_rows()
+            self._refresh_info()
+
+    # -- save ---------------------------------------------------------
+    def _save_sheet(self) -> None:
+        if self._on_save_all is None:
+            messagebox.showinfo(APP_TITLE, "Salve a partir da janela principal.")
+            return
+        self._on_save_all()
+
+
+def _cell_to_str_equivalent(a, b) -> bool:
+    def norm(x):
+        if x is None:
+            return ""
+        return str(x)
+    return norm(a) == norm(b)
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +589,22 @@ class EconomiaApp:
         ).pack(side="left")
         tk.Button(btns, text="Exportar CSV", command=self._export_csv).pack(
             side="left", padx=8
+        )
+        tk.Button(
+            btns,
+            text="Salvar tudo (XLSX)",
+            command=self._save_workbook,
+            bg="#2e7d32",
+            fg="white",
+        ).pack(side="left", padx=8)
+        tk.Button(
+            btns,
+            text="Salvar planilha atual",
+            command=self._save_current_sheet,
+        ).pack(side="left", padx=8)
+
+        self.sheet_list.bind(
+            "<Double-Button-1>", lambda _e: self._open_selected_sheet()
         )
 
         # -- Tab: Sobre ---------------------------------------------------
@@ -535,7 +884,73 @@ class EconomiaApp:
         if not sel:
             return
         name = self.sheet_list.get(sel[0])
-        SheetViewer(self.root, self.wb.sheet(name))  # type: ignore[arg-type]
+        SheetViewer(
+            self.root,
+            self.wb.sheet(name),  # type: ignore[union-attr]
+            on_save_all=self._save_workbook,
+        )
+
+    def _current_sheet_name(self) -> Optional[str]:
+        sel = self.sheet_list.curselection()
+        if not sel:
+            return None
+        return self.sheet_list.get(sel[0])
+
+    def _save_workbook(self) -> None:
+        if not self._guard():
+            return
+        assert self.wb is not None
+        default = os.path.join(_output_dir(), "Economia_editada.xlsx")
+        path = filedialog.asksaveasfilename(
+            title="Salvar workbook como...",
+            defaultextension=".xlsx",
+            initialfile=os.path.basename(default),
+            initialdir=os.path.dirname(default),
+            filetypes=[("Excel XLSX", "*.xlsx")],
+        )
+        if not path:
+            return
+
+        def job():
+            try:
+                self._update_status("Salvando workbook...")
+                out = self.wb.save_as(path)  # type: ignore[union-attr]
+                self._update_status(f"Salvo em {out}")
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(APP_TITLE, f"Workbook salvo em:\n{out}"),
+                )
+            except Exception as e:
+                tb = traceback.format_exc()
+                self.root.after(
+                    0, lambda: messagebox.showerror(APP_TITLE, f"Erro ao salvar:\n{e}\n\n{tb}")
+                )
+
+        threading.Thread(target=job, daemon=True).start()
+
+    def _save_current_sheet(self) -> None:
+        if not self._guard():
+            return
+        name = self._current_sheet_name()
+        if not name:
+            messagebox.showinfo(APP_TITLE, "Selecione uma planilha na lista.")
+            return
+        default = os.path.join(_output_dir(), f"{name}.xlsx")
+        path = filedialog.asksaveasfilename(
+            title=f"Salvar planilha {name}",
+            defaultextension=".xlsx",
+            initialfile=os.path.basename(default),
+            initialdir=os.path.dirname(default),
+            filetypes=[("Excel XLSX", "*.xlsx")],
+        )
+        if not path:
+            return
+        try:
+            out = self.wb.save_sheet_as(name, path)  # type: ignore[union-attr]
+            messagebox.showinfo(APP_TITLE, f"Planilha salva em:\n{out}")
+        except Exception as e:
+            tb = traceback.format_exc()
+            messagebox.showerror(APP_TITLE, f"Erro ao salvar:\n{e}\n\n{tb}")
 
     def _export_csv(self) -> None:
         if not self._guard():

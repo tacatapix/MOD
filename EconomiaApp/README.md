@@ -39,6 +39,32 @@ O instalador coloca o app em
 no Menu Iniciar e na Área de Trabalho, e traz um desinstalador
 normal do Windows.
 
+## Edição das planilhas
+
+A aba **"Planilhas"** lista todas as 65 abas do workbook. Dê duplo clique
+(ou selecione e aperte **"Abrir planilha"**) para abrir o editor estilo
+Excel:
+
+- Clique em qualquer célula para selecioná-la.
+- **F2**, **Enter** ou duplo clique abrem a célula para edição.
+- Digite direto sobre uma célula selecionada para substituir o conteúdo.
+- **Enter** confirma e desce uma linha; **Tab** confirma e vai para a
+  direita; **Esc** cancela.
+- Setas navegam entre células; **Delete/Backspace** limpa a célula
+  selecionada; **Ctrl+Z** desfaz a última alteração.
+- A barra de ferramentas tem **Inserir linha ↑/↓**, **Excluir linha**,
+  **Inserir coluna ←/→**, **Excluir coluna** e **Desfazer**.
+- A barra de fórmulas (campo "Conteúdo") permite editar a célula
+  selecionada do teclado e apertar **Enter**.
+
+Para persistir as alterações, volte à aba **"Planilhas"** e clique em
+**"Salvar tudo (XLSX)"** (grava o workbook inteiro em um novo
+`.xlsx`) ou **"Salvar planilha atual"** (só a aba selecionada). O
+padrão é gravar em `Saida\Economia_editada.xlsx`.
+
+> O arquivo `resources\Economia.xlsm` embutido **não é sobrescrito** —
+> assim você pode sempre voltar ao estado original.
+
 ## Executar do fonte (desenvolvedores)
 
 ```powershell
