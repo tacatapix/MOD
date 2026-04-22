@@ -1,0 +1,100 @@
+<!--
+    PackFazupix_KOTH capture HUD layout.
+
+    This file is loaded at runtime by KOTH_HUD.c. Colours and positions are
+    intentionally conservative so the HUD doesn't clash with VPPAdminTools,
+    Dabs-Framework notifications, or Trader menus.
+-->
+<widgets name="KOTH_Root" version="4">
+    <widget type="PanelWidget" name="KOTH_Root">
+        <data name="Size">1.0 1.0 0 0</data>
+        <data name="Pos">0 0 0 0</data>
+        <data name="Color">0x00000000</data>
+        <data name="Alpha">1.0</data>
+        <data name="HExactSize">1</data>
+        <data name="VExactSize">1</data>
+        <data name="Clipping">0</data>
+
+        <!-- Top-centre capture panel -->
+        <widget type="PanelWidget" name="KOTH_CapturePanel">
+            <data name="Size">0.32 0.11 0 0</data>
+            <data name="Pos">0.34 0.04 0 0</data>
+            <data name="Color">0x80000000</data>
+            <data name="Alpha">0.85</data>
+
+            <widget type="TextWidget" name="KOTH_Title">
+                <data name="Size">1.0 0.28 0 0</data>
+                <data name="Pos">0.0 0.02 0 0</data>
+                <data name="Text">KOTH</data>
+                <data name="TextColor">0xFFFFFFFF</data>
+                <data name="Style">"RobotoCondensedBold"</data>
+                <data name="FontHeight">28</data>
+                <data name="HAlignment">1</data>
+            </widget>
+
+            <widget type="TextWidget" name="KOTH_Status">
+                <data name="Size">1.0 0.22 0 0</data>
+                <data name="Pos">0.0 0.30 0 0</data>
+                <data name="Text"></data>
+                <data name="TextColor">0xFFFFE066</data>
+                <data name="Style">"RobotoCondensed"</data>
+                <data name="FontHeight">18</data>
+                <data name="HAlignment">1</data>
+            </widget>
+
+            <widget type="ProgressBarWidget" name="KOTH_Progress">
+                <data name="Size">0.9 0.12 0 0</data>
+                <data name="Pos">0.05 0.55 0 0</data>
+                <data name="Max">100</data>
+                <data name="Current">0</data>
+                <data name="Color">0xFF2ECC71</data>
+            </widget>
+
+            <widget type="TextWidget" name="KOTH_Count">
+                <data name="Size">0.5 0.18 0 0</data>
+                <data name="Pos">0.03 0.78 0 0</data>
+                <data name="Text">Jogadores na zona: 0</data>
+                <data name="TextColor">0xFFEEEEEE</data>
+                <data name="FontHeight">16</data>
+                <data name="HAlignment">0</data>
+            </widget>
+
+            <widget type="TextWidget" name="KOTH_Timer">
+                <data name="Size">0.5 0.18 0 0</data>
+                <data name="Pos">0.47 0.78 0 0</data>
+                <data name="Text">00:00</data>
+                <data name="TextColor">0xFFEEEEEE</data>
+                <data name="FontHeight">16</data>
+                <data name="HAlignment">2</data>
+            </widget>
+        </widget>
+
+        <!-- Toast popup -->
+        <widget type="PanelWidget" name="KOTH_Toast">
+            <data name="Size">0.30 0.07 0 0</data>
+            <data name="Pos">0.35 0.16 0 0</data>
+            <data name="Color">0xC0000000</data>
+            <data name="Alpha">0.92</data>
+
+            <widget type="TextWidget" name="KOTH_ToastTitle">
+                <data name="Size">1.0 0.45 0 0</data>
+                <data name="Pos">0.0 0.05 0 0</data>
+                <data name="Text">KOTH</data>
+                <data name="TextColor">0xFFFFFFFF</data>
+                <data name="Style">"RobotoCondensedBold"</data>
+                <data name="FontHeight">20</data>
+                <data name="HAlignment">1</data>
+            </widget>
+
+            <widget type="TextWidget" name="KOTH_ToastBody">
+                <data name="Size">1.0 0.55 0 0</data>
+                <data name="Pos">0.0 0.45 0 0</data>
+                <data name="Text"></data>
+                <data name="TextColor">0xFFEEEEEE</data>
+                <data name="Style">"RobotoCondensed"</data>
+                <data name="FontHeight">16</data>
+                <data name="HAlignment">1</data>
+            </widget>
+        </widget>
+    </widget>
+</widgets>

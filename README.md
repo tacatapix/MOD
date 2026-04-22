@@ -17,6 +17,11 @@ Paragon-Arsenal, Juggernaut-Armor, etc.).
   - Event start (`Started`).
   - When someone begins capturing (`CaptureStarted`) — everyone on the
     server sees this, with the current player count in the zone.
+  - While a capture is in progress (`CaptureInProgress`) — periodic
+    broadcast with leader name, player count and percent complete. Cadence
+    configurable via `CaptureProgressWarnEverySec` in `settings.json`.
+  - While the zone is contested (`CaptureContested`) — periodic broadcast
+    with player count. Cadence via `ContestedWarnEverySec`.
   - Capture completion (`Captured`) with tier + kit information.
   - Event end (`Ended`).
 - **4 loot tiers** (T1 Trash → T4 Legendary), weighted so rolls feel dynamic
@@ -67,6 +72,8 @@ list of fields. Highlights:
 | `PreStartCountdownSec`    | `300`   | Announce window before ACTIVE                |
 | `PreStartWarningEverySec` | `60`    | Broadcast cadence during announce            |
 | `FinalWarningEverySec`    | `10`    | Broadcast cadence in the last minute         |
+| `CaptureProgressWarnEverySec` | `30` | "Sendo capturado" cadence (0 disables)     |
+| `ContestedWarnEverySec`   | `45`    | "Zona contestada" cadence (0 disables)       |
 | `CooldownSec`             | `1800`  | Between rounds                               |
 | `HotReloadIntervalSec`    | `15`    | `0` disables hot-reload                      |
 | `MaxConcurrentZones`      | `1`     | Increase for multi-zone servers              |
@@ -130,7 +137,8 @@ Four tiers, each with N kits. Example (abbreviated):
 
 ### `messages.json`
 Every broadcast string is templated. Supported placeholders:
-`{zone}`, `{seconds}`, `{minutes}`, `{player}`, `{tier}`, `{count}`.
+`{zone}`, `{seconds}`, `{minutes}`, `{player}`, `{tier}`, `{count}`,
+`{percent}` (only in `CaptureInProgress`).
 
 ### `webhook.json`
 Discord webhook. **Never commit this file.** Relevant fields:
@@ -142,12 +150,98 @@ Discord webhook. **Never commit this file.** Relevant fields:
 | `BatchSize`        | Embeds per POST (Discord caps at 10)                  |
 | `FlushIntervalSec` | How often the queue is flushed                        |
 | `MaxQueueSize`     | Queue cap — oldest embeds dropped past this           |
+| `MaxRetries`       | Retries per batch on 5xx/timeout (default `5`)        |
+| `MaxBackoffSec`    | Cap for exponential backoff between retries (`60`)    |
 | `Send*`            | Toggle each event type independently                  |
+
+The webhook is **hardened against downtime and rate-limits**:
+- In-flight guard: only one POST in flight at a time (slow Discord never
+  causes overlapping requests to pile up).
+- Retry budget: failed batches are re-queued (at the front, preserving FIFO)
+  up to `MaxRetries` times, with exponential backoff (`2^attempt` seconds,
+  clamped at `MaxBackoffSec`). Healthy POSTs reset the backoff.
+- Permanent-failure codes (`400`/`401`/`403`/`404`) are never retried — the
+  batch is dropped immediately and logged.
+- Payload cap: embed descriptions are truncated at 3500 chars so a runaway
+  string can't blow past Discord's 6000-char per-embed cap.
+- Metric log line every 10 flushes:
+  `[KOTH][INFO][webhook] metrics queued=X sent=Y dropped=Z retries=R flushes=F`.
+
+## Packing into a PBO
+
+Two supported paths — pick based on what you have installed.
+
+### Linux / macOS — quick unsigned PBO (for testing)
+
+```bash
+./tools/pack_linux.sh
+```
+
+Produces `dist/@PackFazupix_KOTH/` with `addons/PackFazupix_KOTH.pbo` ready
+to drop into your server's mod folder. The PBO is **uncompressed and
+unsigned**. It works on any DayZ server you control; it will be rejected
+by DSA-key-protected public servers and cannot be published to the Steam
+Workshop as-is.
+
+### Windows — official DayZ Tools build (for production / Workshop)
+
+```powershell
+pwsh tools/pack_windows.ps1
+# or just double-click
+tools\pack_windows.bat
+```
+
+Requires **DayZ Tools** from Steam (free). The script drives
+`AddonBuilder.exe` so you get a properly-binarised PBO that can be signed
+with `DSSignFile` and uploaded to the Workshop.
+
+Either path produces the same mod folder layout:
+
+```
+dist/@PackFazupix_KOTH/
+├── mod.cpp
+├── keys/                       (drop your .bikey here for DSA-signed servers)
+└── addons/
+    └── PackFazupix_KOTH.pbo
+```
+
+### Obfuscated + signed build (`armake2`)
+
+```bash
+# one-time: install armake2 (Rust)
+cargo install --git https://github.com/KoffeinFlummi/armake2 armake2
+
+# every build: obfuscate -> pack -> sign
+./tools/pack_obfuscated.sh Private
+```
+
+This produces `dist/@PackFazupix_KOTH_Obfuscated/` with:
+
+```
+mod.cpp
+addons/
+  PackFazupix_KOTH.pbo                         (minified sources)
+  PackFazupix_KOTH.pbo.Private.bisign          (DSA signature)
+keys/
+  Private.bikey                                (public verifier)
+```
+
+The matching `Private.biprivatekey` is written to `dist/keys/` and **must
+not be committed or distributed**. Any server running with
+`-verifySignatures=2` that has `Private.bikey` in its `keys/` folder will
+accept this PBO.
+
+The obfuscator (`tools/obfuscate.py`) strips comments and collapses
+whitespace but preserves every identifier. Enforce Script resolves
+classes/RPCs/CfgPatches by name across translation units, so blind
+renaming would brick the mod. Treat the obfuscation as cosmetic
+deterrence, not security — the scripts still load as plain text inside
+DayZ's script VM.
 
 ## Dependencies
 
-- **CommunityFramework** (`@CF`) — required. Used for the RPC pipeline and
-  future permission-gated admin commands.
+- **Nothing else required.** The mod is self-contained and talks to the
+  engine via vanilla `ScriptRPC` / `RestApi`.
 - Optional but recommended (not required for the mod to load):
   - `@Dabs-Framework` — nicer in-game notifications if present; the mod
     falls back to its own toast if not.
